@@ -1,0 +1,164 @@
+﻿@page "/shmoderest"
+
+<style>
+textarea {
+        height: 200px;
+        font-size: 8pt;
+    }
+.input-label {
+    font-weight: bold;
+}
+</style>
+
+@using Newtonsoft.Json; 
+@using Newtonsoft.Json.Linq;
+@using System.Text
+@inject HttpClient httpClient
+
+<PageTitle>ShmodeREST Client</PageTitle>
+
+
+<EditForm Model="@restModel" OnValidSubmit="@HandleValidSubmit">
+
+<div class="input-group mb-3">
+    <div class="input-group-prepend">
+        <InputSelect @bind-Value="restModel.Action" class="btn btn-outline-secondary dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            <option selected value="-1">Method</option>
+            @foreach (var m in methods)
+            {
+                <option value=@m>@m</option>
+            }
+        </InputSelect>
+    </div>
+    <InputText @bind-Value="restModel.Url" placeholder="URL" class="form-control" aria-label="Text input with dropdown button" />
+</div> 
+
+<div class="input-label">Body</div>
+
+<div class="input-group mb-3" >
+    
+ <InputTextArea @bind-Value="restModel.Body" class="form-control" aria-label="With textarea" />
+</div>    
+
+
+<div class="input-group mb-3">
+<button type="submit">Submit</button>
+</div>
+
+<div class="input-label">Status: @statusLabel</div>
+<div class="input-group mb-3" >
+<InputTextArea @bind-Value="headersTextArea" readonly="true" class="form-control" aria-label="With textarea" />
+</div>
+
+</EditForm>
+
+
+@code {
+
+    HttpResponseMessage? httpResponse;
+
+    RestModel? restModel = new();
+
+    Employee[]? employees;
+
+    string? statusLabel = string.Empty;
+
+    public string? headersTextArea = string.Empty;
+
+    List<string> methods = new List<string>() { "GET", "POST", "PUT", "DELETE", "PATCH" };
+
+    public class RestModel
+    {
+        public string? Action { get; set; }
+        public string? Url { get; set; }
+        public string? Body { get; set; }
+
+    }
+
+    public class Employee
+    {
+        public int Id { get; set; }
+        public string? fName { get; set; }
+        public string? lName { get; set; }
+        public int age { get; set; }
+        public string? address { get; set; }
+        public string? city { get; set; }
+        public string? state { get; set; }
+        public string? zipcode { get; set; }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        Dictionary<string, string> HeaderKeyPairs = new();
+        HttpResponseMessage responseMessage =  new();
+        try
+        {
+            if (restModel.Action == "GET")
+            {
+                // Get the response from the given URI
+                responseMessage = await httpClient.GetAsync(restModel.Url);
+
+                // Extract content(body) of response
+                var content = responseMessage.Content.ReadAsStringAsync().Result;
+
+                // Deserialize json string to Json 
+                var contentJson = JsonConvert.DeserializeObject<object>(content);
+
+                // Serialize with indentation for nice display
+                restModel.Body = JsonConvert.SerializeObject(contentJson, Formatting.Indented);
+
+
+            }
+            else if (restModel.Action == "POST")
+            {
+                // Create a formatted text (as json) to be used for PUT or POST methods.
+                var stringContent = new StringContent(restModel.Body, Encoding.UTF8, "application/json");
+
+                // Call POST method given a URL and StringContent
+                responseMessage = await httpClient.PostAsync(restModel.Url, stringContent);
+
+            }
+            else if (restModel.Action == "DELETE")
+            {
+                // Call DELETE method given a URL
+                responseMessage = await httpClient.DeleteAsync(restModel.Url);
+
+            }
+            else if (restModel.Action == "PUT")
+            {
+                // Create a formatted text (as json) to be used for PUT or POST methods.
+                var stringContent = new StringContent(restModel.Body, Encoding.UTF8, "application/json");
+
+                // Call PUT method given URL and StringContent
+                responseMessage = await httpClient.PutAsync(restModel.Url, stringContent);
+            }
+            else if (restModel.Action == "PATCH")
+            {
+                var stringContent = new StringContent(restModel.Body, Encoding.UTF8, "application/json");
+
+                // Call PATCH method given URL and StringContent
+                responseMessage = await httpClient.PatchAsync(restModel.Url, stringContent);
+            }
+
+            //============ DISPLAY HEADERS ====================//
+            // Extract the headers from the response into a dictionary 
+            statusLabel = responseMessage.StatusCode.ToString();
+            var headers = responseMessage.Headers;
+            for(int i=0; i < headers.Count(); i++)
+            {
+                var key = headers.ElementAt(i).Key;
+                var value = headers.ElementAt(i).Value.FirstOrDefault();
+                HeaderKeyPairs.Add(key, value);
+            }
+            // Deserialize dictionary to Json so it's displayed nicely in browser
+            headersTextArea = JsonConvert.SerializeObject(HeaderKeyPairs, Formatting.Indented);
+        }
+        catch (Exception ex)
+        {
+            System.Console.WriteLine("Error: " + ex.GetBaseException().ToString());
+            headersTextArea = ex.GetBaseException().ToString();
+        }
+        
+    }
+
+}
